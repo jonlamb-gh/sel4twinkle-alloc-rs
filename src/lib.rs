@@ -14,13 +14,15 @@ use sel4_sys::{seL4_CPtr, seL4_Word};
 mod allocator;
 mod cspacepath;
 mod first_stage_allocator;
-pub mod init_cap;
+mod init_cap;
 mod io_map;
 mod object_allocator;
 pub mod object_type;
 mod vka;
 pub mod vka_object;
 mod vspace;
+
+pub use init_cap::InitCap;
 
 pub const MIN_UNTYPED_SIZE: usize = 4;
 pub const MAX_UNTYPED_SIZE: usize = 32;
