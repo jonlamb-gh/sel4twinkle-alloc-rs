@@ -1,12 +1,13 @@
 use super::Allocator;
-use sel4_sys::{seL4_BootInfo, seL4_CapInitThreadCNode, seL4_WordBits};
+use init_cap::InitCap;
+use sel4_sys::{seL4_BootInfo, seL4_WordBits};
 
 impl Allocator {
     /// Create an object allocator managing the root CNode's free slots.
     pub fn bootstrap(&mut self, bootinfo: &'static seL4_BootInfo) {
         // Create the allocator
         self.create(
-            seL4_CapInitThreadCNode,
+            InitCap::InitThreadCNode.into(),
             seL4_WordBits as _,
             0,
             bootinfo.empty.start as _,

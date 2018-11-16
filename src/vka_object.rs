@@ -1,5 +1,6 @@
 /// https://github.com/seL4/seL4_libs/blob/master/libsel4vka/include/vka/object.h
 use super::{Allocator, Error};
+use object_type::ObjectType;
 use sel4_sys::*;
 
 /// A wrapper to hold all the allocation information for an 'object'.
@@ -11,7 +12,7 @@ use sel4_sys::*;
 pub struct VkaObject {
     pub cptr: seL4_CPtr,
     pub ut: seL4_Word,
-    pub item_type: seL4_Word,
+    pub item_type: ObjectType,
     pub size_bits: seL4_Word,
 }
 
@@ -20,7 +21,7 @@ impl VkaObject {
         VkaObject {
             cptr: 0,
             ut: 0,
-            item_type: 0,
+            item_type: ObjectType::UntypedObject,
             size_bits: 0,
         }
     }
@@ -28,27 +29,24 @@ impl VkaObject {
 
 impl Allocator {
     pub fn vka_alloc_untyped(&mut self, size_bits: usize) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(api_object_seL4_UntypedObject, size_bits)
+        self.vka_alloc_object(ObjectType::UntypedObject, size_bits)
     }
 
     pub fn vka_alloc_tcb(&mut self) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(api_object_seL4_TCBObject, seL4_TCBBits as _)
+        self.vka_alloc_object(ObjectType::TCBObject, seL4_TCBBits as _)
     }
 
     pub fn vka_alloc_endpoint(&mut self) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(api_object_seL4_EndpointObject, seL4_EndpointBits as _)
+        self.vka_alloc_object(ObjectType::EndpointObject, seL4_EndpointBits as _)
     }
 
     pub fn vka_alloc_notification(&mut self) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(
-            api_object_seL4_NotificationObject,
-            seL4_NotificationBits as _,
-        )
+        self.vka_alloc_object(ObjectType::NotificationObject, seL4_NotificationBits as _)
     }
 
     // TODO - need to do kobject_get_type()
     pub fn vka_alloc_frame(&mut self, size_bits: usize) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(_object_seL4_ARM_SmallPageObject, size_bits)
+        self.vka_alloc_object(ObjectType::ARM_SmallPageObject, size_bits)
     }
 
     pub fn vka_alloc_frame_at(
@@ -56,16 +54,16 @@ impl Allocator {
         size_bits: usize,
         paddr: seL4_Word,
     ) -> Result<VkaObject, Error> {
-        self.vka_alloc_object_at(_object_seL4_ARM_SmallPageObject, size_bits, paddr)
+        self.vka_alloc_object_at(ObjectType::ARM_SmallPageObject, size_bits, paddr)
     }
 
     pub fn vka_alloc_page_table(&mut self) -> Result<VkaObject, Error> {
-        self.vka_alloc_object(_object_seL4_ARM_PageTableObject, seL4_PageTableBits as _)
+        self.vka_alloc_object(ObjectType::ARM_PageTableObject, seL4_PageTableBits as _)
     }
 
     pub fn vka_alloc_object(
         &mut self,
-        obj_type: seL4_Word,
+        obj_type: ObjectType,
         size_bits: usize,
     ) -> Result<VkaObject, Error> {
         self.alloc_object_at_maybe_dev(obj_type, size_bits, None, false)
@@ -73,7 +71,7 @@ impl Allocator {
 
     pub fn vka_alloc_object_at(
         &mut self,
-        obj_type: seL4_Word,
+        obj_type: ObjectType,
         size_bits: usize,
         paddr: seL4_Word,
     ) -> Result<VkaObject, Error> {
@@ -86,7 +84,7 @@ impl Allocator {
     /// https://github.com/seL4/seL4_libs/blob/master/libsel4vka/include/vka/object.h#L75
     fn alloc_object_at_maybe_dev(
         &mut self,
-        obj_type: seL4_Word,
+        obj_type: ObjectType,
         size_bits: usize,
         paddr: Option<seL4_Word>,
         can_use_dev: bool,

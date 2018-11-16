@@ -2,10 +2,10 @@ use super::{
     Allocator, CapRange, Error, UntypedItem, MAX_UNTYPED_ITEMS, MAX_UNTYPED_SIZE, MIN_UNTYPED_SIZE,
 };
 use core::mem;
-use sel4_sys::{
-    api_object_seL4_UntypedObject, seL4_CPtr, seL4_CapInitThreadCNode, seL4_Untyped_Retype,
-    seL4_Word,
-};
+use sel4_sys::{seL4_CPtr, seL4_Untyped_Retype, seL4_Word};
+
+use init_cap::InitCap;
+use object_type::ObjectType;
 
 impl Allocator {
     /// TODO - don't need to zero, just do a normal construct
@@ -123,7 +123,7 @@ impl Allocator {
     pub fn retype_untyped_memory(
         &mut self,
         untyped_item: seL4_CPtr,
-        item_type: seL4_Word,
+        item_type: ObjectType,
         item_size: usize,
         num_items: usize,
     ) -> Result<CapRange, Error> {
@@ -141,9 +141,9 @@ impl Allocator {
         let err = unsafe {
             seL4_Untyped_Retype(
                 untyped_item,
-                item_type,
+                item_type.into(),
                 item_size as _,
-                seL4_CapInitThreadCNode,
+                InitCap::InitThreadCNode.into(),
                 self.root_cnode,
                 self.root_cnode_depth,
                 (self.cslots.first + self.num_slots_used) as _,
@@ -219,7 +219,7 @@ impl Allocator {
 
         let range = self.retype_untyped_memory(
             big_untyped_item,
-            api_object_seL4_UntypedObject,
+            ObjectType::UntypedObject.into(),
             size_bits,
             2,
         )?;

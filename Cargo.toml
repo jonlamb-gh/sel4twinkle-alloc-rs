@@ -4,4 +4,5 @@ version = "0.0.1"
 authors = ["Jon Lamb"]
 
 [dependencies]
-libsel4-sys = {git = "https://github.com/jonlamb-gh/libsel4-sys.git", branch = "devel"}
+#libsel4-sys = {git = "https://github.com/jonlamb-gh/libsel4-sys.git", branch = "devel"}
+libsel4-sys = {git = "https://github.com/jonlamb-gh/libsel4-sys.git", branch = "add-rpi3-support"}
