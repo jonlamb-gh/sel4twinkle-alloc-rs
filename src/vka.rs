@@ -19,7 +19,7 @@ impl Allocator {
             api_object_seL4_EndpointObject => seL4_EndpointBits as _,
             api_object_seL4_NotificationObject => seL4_NotificationBits as _,
             api_object_seL4_CapTableObject => (seL4_SlotBits as usize + obj_size_bits),
-            //seL4_KernelImageObject => seL4_KernelImageBits,
+            // seL4_KernelImageObject => seL4_KernelImageBits,
             _ => self.vka_arch_get_object_size(obj_type),
         }
     }

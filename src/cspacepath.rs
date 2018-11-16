@@ -12,7 +12,5 @@ pub struct CSpacePath {
     pub window: seL4_Word,
 }
 
-/*
-impl CSpacePath {
-}
-*/
+// impl CSpacePath {
+// }

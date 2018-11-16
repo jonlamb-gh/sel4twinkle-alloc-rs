@@ -1,17 +1,6 @@
 // NOTE: this is not a proper vspace impl, just a testing area for now
-// TODO
-// - device support
-// - derive clone for CapRights
-// - get_cap(vaddr) fn to replace awkward Option<&mut seL4_CPtr> usage
 
-// https://github.com/seL4/seL4_libs/blob/master/libsel4vspace/include/vspace/vspace.h
-// https://github.com/seL4/seL4_libs/blob/master/libsel4utils/src/vspace/vspace.c
-// https://github.com/seL4/seL4_libs/blob/master/libsel4utils/src/vspace/bootstrap.c
-// https://github.com/seL4/seL4_libs/blob/master/libsel4vspace/src/sel4_arch/aarch32/mapping.c
-
-// https://github.com/seL4/seL4_libs/blob/master/libsel4platsupport/src/io.c#L206
-
-use super::{Allocator, Error, VSPACE_START};
+use super::{Allocator, Error, PAGE_SIZE_4K, VSPACE_START};
 use sel4_sys::*;
 
 impl Allocator {
@@ -20,6 +9,33 @@ impl Allocator {
         self.page_directory = pd_cap;
         self.last_allocated = VSPACE_START;
         Ok(())
+    }
+
+    /// Returns the page directory for this vspace
+    pub fn vspace_get_root(&self) -> seL4_CPtr {
+        self.page_directory
+    }
+
+    /// Returns the address of the stack top
+    /// n_pages - number of 4K pages to allocate
+    /// A 4k guard page will also be reserved in the address space
+    /// to prevent code from running off the created stack
+    pub fn vspace_new_sized_stack(&mut self, n_pages: usize) -> Result<seL4_Word, Error> {
+        assert_eq!(PAGE_SIZE_4K, 1 << seL4_PageBits);
+
+        // Create and map the pages
+        // Reserve the first page as the guard in our reservation pool
+        let res_vaddr = self.vspace_new_pages(
+            n_pages + 1,
+            seL4_PageBits as _,
+            unsafe { seL4_CapRights_new(1, 1, 1) },
+            seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+            None,
+        )?;
+
+        // First page is the guard
+        let stack_bottom = res_vaddr + PAGE_SIZE_4K;
+        Ok(stack_bottom + (n_pages as seL4_Word * PAGE_SIZE_4K) as seL4_Word)
     }
 
     pub fn vspace_new_ipc_buffer(
@@ -55,7 +71,6 @@ impl Allocator {
         )
     }
 
-    // this doesn't work for multiple pages yet
     pub fn vspace_new_pages_at(
         &mut self,
         paddr: Option<seL4_Word>,
@@ -65,7 +80,7 @@ impl Allocator {
         cache_attributes: seL4_ARM_VMAttributes,
         _can_use_dev: bool,
         cap: Option<&mut seL4_CPtr>,
-    ) -> Result<(seL4_Word), Error> {
+    ) -> Result<seL4_Word, Error> {
         let vaddr = self.last_allocated;
         let mut page_vaddr = vaddr;
         let mut first_cap: seL4_CPtr = 0;
@@ -84,7 +99,7 @@ impl Allocator {
             self.map_page(
                 frame_obj.cptr,
                 page_vaddr,
-                //rights,
+                // rights,
                 unsafe { seL4_CapRights_new(1, 1, 1) },
                 cache_attributes,
             )?;
@@ -118,7 +133,7 @@ impl Allocator {
                 cap,
                 self.page_directory,
                 vaddr,
-                //rights,
+                // rights,
                 seL4_CapRights_new(1, 1, 1),
                 cache_attributes,
             )
@@ -150,7 +165,7 @@ impl Allocator {
                     cap,
                     self.page_directory,
                     vaddr,
-                    //rights,
+                    // rights,
                     seL4_CapRights_new(1, 1, 1),
                     cache_attributes,
                 )
