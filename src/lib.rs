@@ -18,11 +18,13 @@ mod init_cap;
 mod io_map;
 mod object_allocator;
 pub mod object_type;
+mod pmem;
 mod vka;
 pub mod vka_object;
 mod vspace;
 
 pub use init_cap::{InitCap, NUM_INITIAL_CAPS};
+pub use pmem::PMem;
 
 pub const MIN_UNTYPED_SIZE: usize = 4;
 pub const MAX_UNTYPED_SIZE: usize = 32;

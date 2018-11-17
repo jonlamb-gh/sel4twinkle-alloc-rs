@@ -121,7 +121,7 @@ impl Allocator {
         Ok(vaddr)
     }
 
-    fn map_page(
+    pub(crate) fn map_page(
         &mut self,
         cap: seL4_CPtr,
         vaddr: seL4_Word,
