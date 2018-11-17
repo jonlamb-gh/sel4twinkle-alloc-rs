@@ -19,7 +19,10 @@ impl Allocator {
 
         self.last_allocated += PAGE_SIZE_4K;
 
-        let paddr = self.vka_utspace_paddr(obj.ut)?;
+        let result: seL4_ARM_Page_GetAddress_t = unsafe { seL4_ARM_Page_GetAddress(obj.cptr) };
+        if result.error != 0 {
+            return Err(Error::Other);
+        }
 
         self.map_page(
             obj.cptr,
@@ -34,15 +37,9 @@ impl Allocator {
             *cap = obj.cptr;
         }
 
-        Ok(PMem { vaddr, paddr })
-    }
-
-    fn vka_utspace_paddr(&self, ut: seL4_Word) -> Result<seL4_Word, Error> {
-        for i in 0..self.num_init_untyped_items {
-            if self.init_untyped_items[i].item.cap == ut {
-                return Ok(self.init_untyped_items[i].item.paddr);
-            }
-        }
-        Err(Error::Other)
+        Ok(PMem {
+            vaddr,
+            paddr: result.paddr,
+        })
     }
 }
