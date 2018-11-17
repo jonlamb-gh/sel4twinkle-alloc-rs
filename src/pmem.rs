@@ -29,7 +29,8 @@ impl Allocator {
             vaddr,
             // rights,
             unsafe { seL4_CapRights_new(1, 1, 1) },
-            seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+            // not cacheable
+            0,
         )?;
 
         // provide cap to the first frame
