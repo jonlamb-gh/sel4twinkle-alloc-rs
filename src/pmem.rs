@@ -59,11 +59,6 @@ impl Allocator {
 
         let ut: VkaObject = self.vka_alloc_untyped(size_bits as _)?;
 
-        let result: seL4_ARM_Page_GetAddress_t = unsafe { seL4_ARM_Page_GetAddress(ut.cptr) };
-        if result.error != 0 {
-            return Err(Error::Other);
-        }
-
         let frame_cap = self.vka_cspace_alloc()?;
         let mut path = self.vka_cspace_make_path(frame_cap);
 
@@ -90,6 +85,11 @@ impl Allocator {
             seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
             Some(&mut path.cap_ptr),
         )?;
+
+        let result: seL4_ARM_Page_GetAddress_t = unsafe { seL4_ARM_Page_GetAddress(path.cap_ptr) };
+        if result.error != 0 {
+            return Err(Error::Other);
+        }
 
         /* TODO
         let dest_paddr = base_paddr + (i as seL4_Word * PAGE_SIZE_4K);
