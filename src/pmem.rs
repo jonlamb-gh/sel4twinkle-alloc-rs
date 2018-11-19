@@ -82,7 +82,8 @@ impl Allocator {
             1,
             PAGE_BITS_4K as _,
             unsafe { seL4_CapRights_new(1, 1, 1) },
-            seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+            //seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+            0,
             Some(&mut path.cap_ptr),
         )?;
 
