@@ -1,7 +1,5 @@
-// TODO - this allocator doesn't book keep untyped splits yet
-// will just consume entire untyped with paddr to beginning until then
-
 use super::{Allocator, Error, PAGE_BITS_4K, PAGE_SIZE_4K};
+use core::intrinsics;
 use object_type::ObjectType;
 use sel4_sys::*;
 use vka_object::VkaObject;
@@ -142,6 +140,81 @@ impl Allocator {
             cur = top;
         }
     }
+
+    pub fn pmem_new_pages_at_paddr(
+        &mut self,
+        ut_paddr: seL4_Word,
+        paddr: seL4_Word,
+        num_pages: usize,
+        cap: Option<&mut seL4_CPtr>,
+    ) -> Result<PMem, Error> {
+        // Get the base size then round up to the next power of 2 size.
+        // This is because untypeds are allocated in powers of 2
+        let size = num_pages * PAGE_SIZE_4K as usize;
+        let base_size_bits = log_base_2(size);
+
+        let size_bits = if (1 << base_size_bits) != size {
+            base_size_bits + 1
+        } else {
+            base_size_bits
+        };
+
+        let ut: VkaObject =
+            self.vka_alloc_object_at(ObjectType::UntypedObject, size_bits, ut_paddr)?;
+
+        // TODO - retype/split so we can start at paddr (if paddr != ut_paddr)?
+        assert_eq!(ut_paddr, paddr, "Offset from base not impl yet");
+
+        // TODO - use heapless or caller provided?
+        let mut caps: [seL4_CPtr; 316] = [0; 316];
+        assert!(num_pages <= 316);
+
+        // Allocate all of the frames
+        for f in 0..num_pages {
+            let cap = self.vka_cspace_alloc()?;
+            let path = self.vka_cspace_make_path(cap);
+
+            let err = unsafe {
+                seL4_Untyped_Retype(
+                    ut.cptr,
+                    ObjectType::ARM_SmallPageObject.into(),
+                    size_bits as _,
+                    path.root,
+                    path.dest,
+                    path.dest_depth,
+                    path.offset,
+                    1,
+                )
+            };
+            if err != 0 {
+                return Err(Error::ResourceExhausted);
+            }
+
+            caps[f] = path.cap_ptr;
+        }
+
+        // Base of the reservation
+        let base_vaddr = self.last_allocated;
+
+        // Map in all of the pages
+        for f in 0..num_pages {
+            let frame_vaddr = self.last_allocated;
+
+            self.map_page(
+                caps[f],
+                frame_vaddr,
+                unsafe { seL4_CapRights_new(1, 1, 1) },
+                seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+            )?;
+
+            self.last_allocated += PAGE_SIZE_4K;
+        }
+
+        Ok(PMem {
+            vaddr: base_vaddr,
+            paddr: paddr,
+        })
+    }
 }
 
 fn round_up(val: usize, base: usize) -> usize {
@@ -150,4 +223,9 @@ fn round_up(val: usize, base: usize) -> usize {
     } else {
         base - (val % base)
     }
+}
+
+fn log_base_2(val: usize) -> usize {
+    // sizeof(word) * CHAR_BIT - CLZL(n) - 1
+    (8 * 8) - unsafe { intrinsics::ctlz(val as u64) } as usize - 1
 }

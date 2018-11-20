@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(core_intrinsics)]
 
 /// A Rust port of libsel4twinkle allocator.
 ///
