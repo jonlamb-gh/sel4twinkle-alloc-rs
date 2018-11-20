@@ -90,19 +90,6 @@ impl Allocator {
             return Err(Error::Other);
         }
 
-        /* TODO
-        let dest_paddr = base_paddr + (i as seL4_Word * PAGE_SIZE_4K);
-        let _frame_vaddr = self.vspace_new_pages_at(
-            Some(dest_paddr),
-            1,
-            PAGE_BITS_4K as _,
-            unsafe { seL4_CapRights_new(1, 1, 1) },
-            seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
-            false,
-            Some(&mut path.cap_ptr),
-        )?;
-        */
-
         if let Some(cap) = cap {
             *cap = path.cap_ptr;
         }
