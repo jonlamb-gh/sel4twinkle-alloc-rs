@@ -44,6 +44,7 @@ pub const PAGE_SIZE_4K: seL4_Word = 1 << PAGE_BITS_4K;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     ResourceExhausted,
+    InvalidAddress,
     Other,
 }
 

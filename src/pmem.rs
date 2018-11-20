@@ -130,11 +130,16 @@ impl Allocator {
 
     pub fn pmem_new_pages_at_paddr(
         &mut self,
-        ut_paddr: seL4_Word,
         paddr: seL4_Word,
         num_pages: usize,
-        cap: Option<&mut seL4_CPtr>,
     ) -> Result<PMem, Error> {
+        // If we have to retype the beginning of an untyped
+        // this is the number of bytes
+        let mut base_offset: seL4_Word = 0;
+
+        // Get the base paddr that contains the given start paddr
+        let ut_paddr = self.contained_paddr(paddr)?;
+
         // Get the base size then round up to the next power of 2 size.
         // This is because untypeds are allocated in powers of 2
         let size = num_pages * PAGE_SIZE_4K as usize;
@@ -146,14 +151,47 @@ impl Allocator {
             base_size_bits
         };
 
-        let ut: VkaObject =
-            self.vka_alloc_object_at(ObjectType::UntypedObject, size_bits, ut_paddr)?;
+        let ut: VkaObject = if ut_paddr != paddr {
+            // Not at the start of the untyped, so retyped as close to paddr as possible
+            let offset = paddr - ut_paddr;
+            let offset_size_bits = log_base_2(offset as _);
+            let untyped_full_size_bits = self.untyped_size_bits(ut_paddr)?;
+            assert!(offset >= 1 << offset_size_bits, "TODO - reduce size bits");
 
-        // TODO - retype/split so we can start at paddr (if paddr != ut_paddr)?
-        assert_eq!(ut_paddr, paddr, "Offset from base not impl yet");
+            base_offset = offset - (1 << offset_size_bits);
+
+            let obj: VkaObject = self.vka_alloc_object_at(
+                ObjectType::UntypedObject,
+                untyped_full_size_bits as _,
+                ut_paddr,
+            )?;
+
+            let cap = self.vka_cspace_alloc()?;
+            let path = self.vka_cspace_make_path(cap);
+
+            let err = unsafe {
+                seL4_Untyped_Retype(
+                    obj.cptr,
+                    ObjectType::UntypedObject.into(),
+                    offset_size_bits as _,
+                    path.root,
+                    path.dest,
+                    path.dest_depth,
+                    path.offset,
+                    1,
+                )
+            };
+            if err != 0 {
+                return Err(Error::ResourceExhausted);
+            }
+
+            obj
+        } else {
+            self.vka_alloc_object_at(ObjectType::UntypedObject, size_bits, ut_paddr)?
+        };
 
         // TODO - use heapless or caller provided?
-        let mut caps: [seL4_CPtr; 316] = [0; 316];
+        let mut caps: [seL4_CPtr; 64] = [0; 64];
         assert!(num_pages <= 316);
 
         // Allocate all of the frames
@@ -183,6 +221,15 @@ impl Allocator {
         // Base of the reservation
         let base_vaddr = self.last_allocated;
 
+        // Sanity check we are starting at the desired paddr
+        let first_cap = caps[0];
+        let result: seL4_ARM_Page_GetAddress_t = unsafe { seL4_ARM_Page_GetAddress(first_cap) };
+        if result.error != 0 {
+            return Err(Error::Other);
+        }
+        let base_paddr = result.paddr + base_offset;
+        assert_eq!(base_paddr, paddr, "Failed to map paddr");
+
         // Map in all of the pages
         for f in 0..num_pages {
             let frame_vaddr = self.last_allocated;
@@ -201,6 +248,32 @@ impl Allocator {
             vaddr: base_vaddr,
             paddr: paddr,
         })
+    }
+
+    /// Returns the base paddr of the untyped region that contains the given
+    /// paddr, if any
+    pub fn contained_paddr(&self, paddr: seL4_Word) -> Result<seL4_Word, Error> {
+        for i in 0..self.num_init_untyped_items {
+            let ut_paddr = self.init_untyped_items[i].item.paddr;
+            let ut_size = 1 << self.init_untyped_items[i].item.size_bits;
+            let ut_paddr_top = ut_paddr + ut_size;
+
+            if (paddr >= ut_paddr) && (paddr <= ut_paddr_top) {
+                return Ok(ut_paddr);
+            }
+        }
+
+        Err(Error::InvalidAddress)
+    }
+
+    fn untyped_size_bits(&self, paddr: seL4_Word) -> Result<seL4_Word, Error> {
+        for i in 0..self.num_init_untyped_items {
+            if paddr == self.init_untyped_items[i].item.paddr {
+                return Ok(self.init_untyped_items[i].item.size_bits as seL4_Word);
+            }
+        }
+
+        Err(Error::InvalidAddress)
     }
 }
 
