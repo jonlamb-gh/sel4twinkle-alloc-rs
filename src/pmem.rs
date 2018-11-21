@@ -202,7 +202,12 @@ impl Allocator {
 
         // TODO - use heapless or caller provided?
         let mut caps: [seL4_CPtr; 64] = [0; 64];
-        assert!(num_pages <= caps.len());
+        assert!(
+            num_pages <= caps.len(),
+            "Request {} pages, but only have {} caps",
+            num_pages,
+            caps.len()
+        );
 
         // Allocate all of the frames
         for f in 0..num_pages {
