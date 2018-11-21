@@ -133,10 +133,6 @@ impl Allocator {
         paddr: seL4_Word,
         num_pages: usize,
     ) -> Result<PMem, Error> {
-        // If we have to retype the beginning of an untyped
-        // this is the number of bytes
-        let mut base_offset: seL4_Word = 0;
-
         // Get the base paddr that contains the given start paddr
         let ut_paddr = self.contained_paddr(paddr)?;
 
@@ -193,7 +189,7 @@ impl Allocator {
                     return Err(Error::ResourceExhausted);
                 }
 
-                remaining -= (1 << skip_size_bits);
+                remaining -= 1 << skip_size_bits;
             }
 
             // Return the untyped now that it's next available
