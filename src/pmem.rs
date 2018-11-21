@@ -152,39 +152,52 @@ impl Allocator {
         };
 
         let ut: VkaObject = if ut_paddr != paddr {
-            // Not at the start of the untyped, so retyped as close to paddr as possible
-            let offset = paddr - ut_paddr;
-            let offset_size_bits = log_base_2(offset as _);
+            // Desired paddr is not at the start of the untyped,
+            // so iteratively retyped it as close to the desired
+            // paddr as possible
+
+            // Allocate the whole untyped region
             let untyped_full_size_bits = self.untyped_size_bits(ut_paddr)?;
-            assert!(offset >= 1 << offset_size_bits, "TODO - reduce size bits");
-
-            base_offset = offset - (1 << offset_size_bits);
-
             let obj: VkaObject = self.vka_alloc_object_at(
                 ObjectType::UntypedObject,
                 untyped_full_size_bits as _,
                 ut_paddr,
             )?;
 
-            let cap = self.vka_cspace_alloc()?;
-            let path = self.vka_cspace_make_path(cap);
+            let mut remaining: seL4_Word = paddr - ut_paddr;
 
-            let err = unsafe {
-                seL4_Untyped_Retype(
-                    obj.cptr,
-                    ObjectType::UntypedObject.into(),
-                    offset_size_bits as _,
-                    path.root,
-                    path.dest,
-                    path.dest_depth,
-                    path.offset,
-                    1,
-                )
-            };
-            if err != 0 {
-                return Err(Error::ResourceExhausted);
+            // TODO - this only works when things are aligned to powers of 2 for now
+
+            // Retype until we can go no further
+            while remaining != 0 {
+                // Can only retype in powers of 2
+                let skip_size_bits = log_base_2(remaining as _) as seL4_Word;
+                assert!(remaining >= 1 << skip_size_bits, "TODO - reduce size bits");
+
+                let cap = self.vka_cspace_alloc()?;
+                let path = self.vka_cspace_make_path(cap);
+
+                let err = unsafe {
+                    seL4_Untyped_Retype(
+                        obj.cptr,
+                        ObjectType::UntypedObject.into(),
+                        skip_size_bits,
+                        path.root,
+                        path.dest,
+                        path.dest_depth,
+                        path.offset,
+                        1,
+                    )
+                };
+                if err != 0 {
+                    return Err(Error::ResourceExhausted);
+                }
+
+                remaining -= (1 << skip_size_bits);
             }
 
+            // Return the untyped now that it's next available
+            // cap will at the desired paddr (or as close to it as possible)
             obj
         } else {
             self.vka_alloc_object_at(ObjectType::UntypedObject, size_bits, ut_paddr)?
@@ -192,7 +205,7 @@ impl Allocator {
 
         // TODO - use heapless or caller provided?
         let mut caps: [seL4_CPtr; 64] = [0; 64];
-        assert!(num_pages <= 316);
+        assert!(num_pages <= caps.len());
 
         // Allocate all of the frames
         for f in 0..num_pages {
@@ -227,7 +240,7 @@ impl Allocator {
         if result.error != 0 {
             return Err(Error::Other);
         }
-        let base_paddr = result.paddr + base_offset;
+        let base_paddr = result.paddr;
         assert_eq!(base_paddr, paddr, "Failed to map paddr");
 
         // Map in all of the pages
@@ -239,6 +252,8 @@ impl Allocator {
                 frame_vaddr,
                 unsafe { seL4_CapRights_new(1, 1, 1) },
                 seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
+                /*seL4_ARM_VMAttributes_seL4_ARM_PageCacheable,
+                 *0, */
             )?;
 
             self.last_allocated += PAGE_SIZE_4K;
