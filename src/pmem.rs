@@ -132,6 +132,7 @@ impl Allocator {
         &mut self,
         paddr: seL4_Word,
         num_pages: usize,
+        cache_attributes: seL4_ARM_VMAttributes,
     ) -> Result<PMem, Error> {
         // Get the base paddr that contains the given start paddr
         let ut_paddr = self.contained_paddr(paddr)?;
@@ -247,9 +248,7 @@ impl Allocator {
                 caps[f],
                 frame_vaddr,
                 unsafe { seL4_CapRights_new(1, 1, 1) },
-                seL4_ARM_VMAttributes_seL4_ARM_Default_VMAttributes,
-                /*seL4_ARM_VMAttributes_seL4_ARM_PageCacheable,
-                 *0, */
+                cache_attributes,
             )?;
 
             self.last_allocated += PAGE_SIZE_4K;
