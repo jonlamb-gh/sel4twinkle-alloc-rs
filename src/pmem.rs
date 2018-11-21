@@ -201,7 +201,7 @@ impl Allocator {
         };
 
         // TODO - use heapless or caller provided?
-        let mut caps: [seL4_CPtr; 64] = [0; 64];
+        let mut caps: [seL4_CPtr; 380] = [0; 380];
         assert!(
             num_pages <= caps.len(),
             "Request {} pages, but only have {} caps",
