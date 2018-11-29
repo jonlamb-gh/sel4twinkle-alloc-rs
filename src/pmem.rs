@@ -265,6 +265,88 @@ impl Allocator {
         })
     }
 
+    pub fn pmem_new_dma_pages(
+        &mut self,
+        num_pages: usize,
+        cache_attributes: seL4_ARM_VMAttributes,
+    ) -> Result<PMem, Error> {
+        // Get the base size then round up to the next power of 2 size.
+        // This is because untypeds are allocated in powers of 2
+        let size = num_pages * PAGE_SIZE_4K as usize;
+        let base_size_bits = log_base_2(size);
+
+        let size_bits = if (1 << base_size_bits) != size {
+            base_size_bits + 1
+        } else {
+            base_size_bits
+        };
+
+        let ut = self.vka_alloc_untyped(size_bits)?;
+
+        // TODO - use heapless or caller provided?
+        let mut caps: [seL4_CPtr; 380] = [0; 380];
+        assert!(
+            num_pages <= caps.len(),
+            "Request {} pages, but only have {} caps",
+            num_pages,
+            caps.len()
+        );
+
+        // Allocate all of the frames
+        for f in 0..num_pages {
+            let cap = self.vka_cspace_alloc()?;
+            let path = self.vka_cspace_make_path(cap);
+
+            let err = unsafe {
+                seL4_Untyped_Retype(
+                    ut.cptr,
+                    ObjectType::ARM_SmallPageObject.into(),
+                    size_bits as _,
+                    path.root,
+                    path.dest,
+                    path.dest_depth,
+                    path.offset,
+                    1,
+                )
+            };
+            if err != 0 {
+                return Err(Error::ResourceExhausted);
+            }
+
+            caps[f] = path.cap_ptr;
+        }
+
+        // Base of the reservation
+        let base_vaddr = self.last_allocated;
+
+        // Use the frame cap to get its physical address
+        let first_cap = caps[0];
+        let result: seL4_ARM_Page_GetAddress_t = unsafe { seL4_ARM_Page_GetAddress(first_cap) };
+        if result.error != 0 {
+            return Err(Error::Other);
+        }
+        let base_paddr = result.paddr;
+
+        // Map in all of the pages
+        for f in 0..num_pages {
+            let frame_vaddr = self.last_allocated;
+
+            self.map_page(
+                caps[f],
+                frame_vaddr,
+                unsafe { seL4_CapRights_new(1, 1, 1) },
+                cache_attributes,
+            )?;
+
+            self.last_allocated += PAGE_SIZE_4K;
+        }
+
+        Ok(PMem {
+            vaddr: base_vaddr,
+            paddr: base_paddr,
+        })
+    }
+
     /// Returns the base paddr of the untyped region that contains the given
     /// paddr, if any
     pub fn contained_paddr(&self, paddr: seL4_Word) -> Result<seL4_Word, Error> {
