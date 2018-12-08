@@ -153,7 +153,11 @@ impl Thread {
                 }
             }
         }
-        #[cfg(all(target_arch = "aarch64", target_os = "sel4", target_env = "fel4"))]
+        #[cfg(all(
+            target_arch = "aarch64",
+            target_os = "sel4",
+            target_env = "fel4"
+        ))]
         {
             if let Some(r0) = arg0 {
                 regs.x0 = r0;
